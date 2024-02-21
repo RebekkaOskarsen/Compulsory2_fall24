@@ -1,127 +1,135 @@
 #include<iostream>
 #include<glad/glad.h>
 #include<GLFW/glfw3.h>
-#include<stb/stb_image.h>
 #include<glm/glm.hpp>
 #include<glm/gtc/matrix_transform.hpp>
 #include<glm/gtc/type_ptr.hpp>
 #include<vector>
 
-
+#include "shaderClass.h"
+#include "VBO.h"
+#include "VAO.h"
 #include "Camera.h"
+
 using namespace std;
 
 const unsigned int width = 800;
 const unsigned int height = 800;
 
-//Points to calculate the minste kvadrat metoden
-vector<glm::vec2> points =
-{
-    {2.0f, 0.0f},
-    {3.0f, 3.0f},
-    {4.0f, 1.0f},
-    {5.0f, 2.0f},
-    {5.0f, 4.0f},
-    {6.0f, 3.0f},
-    {6.0f, 6.0f}
+// The points to draw
+vector<pair<int, int>> points = 
+{ 
+	{2,0}, 
+	{3,3}, 
+	{4,1}, 
+	{5,2}, 
+	{5,4}, 
+	{6,3}, 
+	{6,6} 
 };
 
-glm::vec3 estimateParabolaParameters(const std::vector<glm::vec2>& points)
-{
-    int n = points.size();
-    float sumX = 0, sumY = 0, sumX2 = 0, sumX3 = 0, sumX4 = 0, sumXY = 0, sumX2Y = 0;
+GLfloat vertices[14]; // Each point has two coordinates
 
-    for (const auto& point : points)
-    {
-        float x = point.x;
-        float y = point.y;
-        sumX += x;
-        sumY += y;
-        sumX2 += x * x;
-        sumX3 += x * x * x;
-        sumX4 += x * x * x * x;
-        sumXY += x * y;
-        sumX2Y += x * x * y;
-    }
 
-    glm::mat3 A = glm::mat3(n, sumX, sumX2, sumX, sumX2, sumX3, sumX2, sumX3, sumX4);
-    glm::vec3 B = glm::vec3(sumY, sumXY, sumX2Y);
-    glm::vec3 result = glm::inverse(A) * B;
+void savePointsToFile(const char* filename) {
+	ofstream file(filename);
+	if (!file) {
+		cout << "Failed to open the file for writing." << endl;
+		return;
+	}
 
-    return result;
+	for (const auto& point : points) {
+		file << point.first << " " << point.second << endl;
+	}
+
+	file.close();
 }
 
-void renderParabola(const glm::vec3& coefficients)
-{
-    glPointSize(5.0f);
-    glColor3f(1.0f, 0.0f, 0.0f);
-
-    glBegin(GL_POINTS);
-    for (float x = 2.0f; x <= 6.0f; x += 0.01f) {
-        float y = coefficients.x * x * x + coefficients.y * x + coefficients.z;
-        glVertex2f(x, y);
-    }
-    glEnd();
-}
-
-void renderPoints()
-{
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_POINTS, 7, 7); // Draw points starting from index 7
-    glBindVertexArray(0);
-}
 
 int main()
 {
-    //Initialize GLFW
-    glfwInit();
+	glfwInit(); //Initialize GLFW
 
-    //Tell GLFW what version of OpenGL we are using, using version 3
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); //Use OpenGL 3.3
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); //Use the core profile
 
 
 
-    //Create a window
-    GLFWwindow* window = glfwCreateWindow(width, height, "OpenGL", NULL, NULL); //With, hight, name, fullscreen or not, not important
-    if (window == NULL)
-    {
-        cout << "Failed to create GLFW window" << endl;
-        glfwTerminate();
-        return -1;
-    }
-    glfwMakeContextCurrent(window); //Make the window the current context
+	GLFWwindow* window = glfwCreateWindow(width, height, "Minste Kvadrat Metode", NULL, NULL); //Create a window
+	if (window == NULL) //If the window was not created
+	{
+		cout << "Failed to create GLFW window" << endl;
+		glfwTerminate(); //Terminate GLFW
+		return -1;
+	}
+	glfwMakeContextCurrent(window); //Make the window the current context
 
-    //Initialize GLAD
-    gladLoadGL();
+	gladLoadGL(); //Load GLAD
 
-    //Set the viewport
-    glViewport(0, 0, width, height);
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) //Initialize GLAD
+	{
+		cout << "Failed to initialize GLAD" << endl;
+		return -1;
+	}
 
+	glViewport(0, 0, width, height); //Set the viewport
 
+	cout << "OpenGL version: " << glGetString(GL_VERSION) << endl;
 
-    //Main loop
-    while (!glfwWindowShouldClose(window))
-    {
-        //Render
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f); //Set the window color 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //Clear the window and the depth buffer
-
-        renderPoints();
-
-        renderParabola(coefficients);
-
-        glfwSwapBuffers(window);
-
-        //This is the event handling part and takes care of all GLFW events 
-        // It is important to keep it in the loop
-        glfwPollEvents();
-
-    }
+	Shader shaderProgram("default.vert", "default.frag"); //Create a shader program
 
 
-    glfwTerminate();
 
-    return 0;
+	VAO VAO1; //Create a VAO
+	VAO1.Bind(); //Bind the VAO
+
+	// Create the vertices array
+	for (size_t i = 0; i < points.size(); ++i)  // Copy the points to the vertices array
+	{
+		vertices[i * 2] = static_cast<float>(points[i].first);  // x-coordinate
+		vertices[i * 2 + 1] = static_cast<float>(points[i].second);  // y-coordinate
+	}
+
+	savePointsToFile("points.txt");
+
+	VBO VBO1(vertices, sizeof(vertices)); //Create a VBO
+
+	VAO1.LinkVBO(VBO1, 0); //Link the VBO to the VAO
+	VAO1.Unbind(); //Unbind the VAO
+	VBO1.Unbind(); //Unbind the VBO
+
+	Camera camera(width, height, glm::vec3(0.0f, 0.0f, 10.0f)); //Create a camera
+
+	while (!glfwWindowShouldClose(window))
+	{
+		
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f); //Set the clear color
+		glClear(GL_COLOR_BUFFER_BIT); //Clear the color buffer
+		shaderProgram.Activate(); //Activate the shader program
+		
+		camera.Inputs(window); //Input to the camera
+		camera.Matrix(45.0f, 0.1f, 100.0f, shaderProgram, "camMatrix"); //Create the camera matrix
+
+
+		glPointSize(10.0f); // Set the point size
+		glDrawArrays(GL_POINTS, 0, points.size()); // Draw the points
+
+		VAO1.Bind(); //Bind the VAO
+
+
+		glfwSwapBuffers(window); //Swap the buffers
+		glfwPollEvents(); //Poll for events
+		
+	}
+
+	VAO1.Delete(); //Delete the VAO
+	VBO1.Delete(); //Delete the VBO
+	shaderProgram.Delete(); //Delete the shader program
+
+	glfwDestroyWindow(window); //Destroy the window
+
+	glfwTerminate(); //Terminate GLFW
+	return 0;
+
 }
